@@ -1,0 +1,2 @@
+[workspace]
+members = ["wowsreplay_parser", "wowsreplay"]
