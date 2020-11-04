@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 nom = "6.0"
 blowfish = "0.7"
+flate2 = "1.0.19"

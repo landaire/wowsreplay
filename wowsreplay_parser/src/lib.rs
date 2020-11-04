@@ -1,28 +1,71 @@
 pub mod parser;
 use blowfish::cipher::{NewBlockCipher, BlockCipher, block::Key};
+use std::convert::TryInto;
 
-const ENCRYPTION_KEY: [u8; 16] = [0xDE, 0x72, 0xBE, 0xA0, 0xDE, 0x04, 0xBE, 0xB1, 0xDE, 0xFE, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF];
+const ENCRYPTION_KEY: [u8; 16] = [0x29, 0xb7, 0xc9, 0x09, 0x38, 0x3f, 0x84, 0x88, 0xfa, 0x98, 0xec, 0x4e, 0x13, 0x19, 0x79, 0xfb];
 
-struct Decryptor {
-    prev_block: Option<[u8; 8]>,
+pub struct Unpacker {
     blowfish: blowfish::Blowfish,
 }
 
-impl Decryptor {
+impl Unpacker {
     pub fn new() -> Self {
-        Decryptor {
-            prev_block: None,
+        Unpacker {
             blowfish: blowfish::Blowfish::new_varkey(&ENCRYPTION_KEY).unwrap(),
         }
     }
 
-    fn decrypt_block(&mut self, encrypted_block: &mut [u8; 8]) {
-        self.blowfish.decrypt_block(encrypted_block.into());
-        if let Some(prev_block) = self.prev_block.take() {
-            for (i, b) in prev_block.iter().enumerate() {
-                encrypted_block[i] ^= *b;
+    fn unpack(&mut self, data: &mut [u8]) -> Vec<u8> {
+        self.decrypt(data);
+        self.decompress(data)
+    }
+
+    fn decrypt(&mut self, data: &mut [u8]) {
+        let mut previous_block = &mut [0u8; 8];
+        let mut chunks_iter = data.chunks_exact_mut(8);
+        while let Some(block) = chunks_iter.next() {
+            let block: &mut [u8] = block.try_into().unwrap();
+            self.blowfish.decrypt_block(block.into());
+
+            for (i, b) in previous_block.iter().enumerate() {
+                block[i] ^= *b;
             }
-            self.prev_block = Some(encrypted_block.clone());
+
+            previous_block = block.try_into().unwrap();
         }
+
+        let remainder = chunks_iter.into_remainder();
+        if !remainder.is_empty() {
+            let mut padded_block = [0u8; 8];
+            for i in 0..remainder.len() {
+                padded_block[i] = remainder[i];
+            }
+
+            let padded_block: &mut [u8] = &mut padded_block[..];
+
+            self.blowfish.decrypt_block(padded_block.into());
+
+            for (i, b) in previous_block.iter().enumerate() {
+                padded_block[i] ^= *b;
+            }
+
+            for (i, b) in remainder.iter_mut().enumerate() {
+                *b = padded_block[i];
+            }
+        }
+    }
+
+    fn decompress(&mut self, data: &mut [u8]) -> Vec<u8> {
+        std::fs::write("data.zlib", &data[..data.len()-3]);
+        use std::io::prelude::*;
+        use flate2::write::ZlibDecoder;
+        let mut writer = Vec::new();
+
+        let mut d = ZlibDecoder::new(writer);
+        d.write_all(&data[..data.len()-3]).expect("failed to write");
+        let output = d.finish().expect("failed to finish");
+        std::fs::write("data.bin", &output);
+
+        output
     }
 }

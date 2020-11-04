@@ -1,2 +1,2 @@
 [workspace]
-members = ["wowsreplay_parser", "wowsreplay"]
+members = ['wowsreplay', 'wowsreplay_parser']
