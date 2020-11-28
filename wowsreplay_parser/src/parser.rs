@@ -7,6 +7,7 @@ use nom::{
   combinator::map_res,
   sequence::tuple
 };
+use crate::wows::packet::Packet;
 
 #[derive(Debug)]
 struct Header<'a> {
@@ -27,19 +28,31 @@ fn header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
     }))
 }
 
-fn block(input: &[u8]) -> IResult<&[u8], &[u8]> {
+fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
     let (input, unk) = le_u32(input)?;
-    let (input, mut len) = le_u32(input)?;
-    let extra = len % 8;
+    let (input, len) = le_u32(input)?;
+    let mut padded_len = len as usize;
+    let extra = padded_len % 8;
     if extra != 0 {
-        len += 8 - extra;
+        padded_len += 8 - extra;
     }
     // println!("len: {:X}", len);
     // println!("input len: {:X}", input.len());
 
-    take(len)(input)
+    let (input, block) = take(padded_len)(input)?;
+    IResult::Ok((input, (len as usize, block)))
+
 }
 
+fn parse_replay_network_data<'a>(input: &'a [u8]) -> IResult<&'a [u8], Packet<'a>> {
+    let (input, data_len) = le_u32(input)?;
+    let (input, ty) = le_u32(input)?;
+    let (input, time) = le_u32(input)?;
+
+    let (input, data) = take(data_len)(input)?;
+
+    IResult::Ok((input, Packet { data_len, ty, time, data }))
+}
 
 #[cfg(test)]
 mod tests {
@@ -63,19 +76,38 @@ mod tests {
 
     #[test]
     fn parsing_decrypting_block_works() {
-        let data = include_bytes!("../test_data/smaland.wowsreplay");
+        let data = include_bytes!("../test_data/smaland2.wowsreplay");
         let header = header(data);
         assert!(header.is_ok());
         let (data, _) = header.unwrap();
 
         let res = block(data);
         assert!(res.is_ok());
-        let mut encrypted_block = res.unwrap().1.to_vec();
+        let (len, encrypted_block) = res.unwrap().1;
+        let mut encrypted_block = encrypted_block.to_vec();
 
         let mut unpacker = crate::Unpacker::new();
-        let unpacked = unpacker.unpack(encrypted_block.as_mut_slice());
+        let unpacked = unpacker.unpack(encrypted_block.as_mut_slice(), len);
 
         use nom::HexDisplay;
+
+        let mut network_data = unpacked.as_slice();
+
+        let mut unique_packet_types = std::collections::BTreeSet::new();
+        while network_data.len() > 0xC {
+            let parse_result = parse_replay_network_data(network_data).unwrap();
+            network_data = parse_result.0;
+            let packet = parse_result.1;
+
+            println!("{:#X?}", packet);
+            unique_packet_types.insert(packet.ty);
+            match packet.deserialize() {
+                Some(deserialized_data) => println!("{:#X?}", deserialized_data),
+                None => println!("{}", packet.data.to_hex(16)),
+            }
+        }
+
+        println!("{:#X?}", unique_packet_types);
 
         // let res =decrypted_block(data.1);
         // assert!(res.is_ok());
