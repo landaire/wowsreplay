@@ -93,14 +93,14 @@ mod tests {
 
         let mut network_data = unpacked.as_slice();
 
-        let mut unique_packet_types = std::collections::BTreeSet::new();
+        let mut unique_packet_types = std::collections::BTreeMap::<u32, usize>::new();
         while network_data.len() > 0xC {
             let parse_result = parse_replay_network_data(network_data).unwrap();
             network_data = parse_result.0;
             let packet = parse_result.1;
 
             println!("{:#X?}", packet);
-            unique_packet_types.insert(packet.ty);
+            *unique_packet_types.entry(packet.ty).or_default() += 1;
             match packet.deserialize() {
                 Some(deserialized_data) => println!("{:#X?}", deserialized_data),
                 None => println!("{}", packet.data.to_hex(16)),

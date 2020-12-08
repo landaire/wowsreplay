@@ -209,6 +209,7 @@ name = "wowsreplay_parser"
 version = "0.1.0"
 dependencies = [
  "blowfish",
+ "byteorder",
  "flate2",
  "nom",
 ]

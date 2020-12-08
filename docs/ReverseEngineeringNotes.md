@@ -771,4 +771,4 @@ noreturn
 
 So this is some sort of `operator new` function. But near the start is some allocation routine with a size of `0x3c0` passed to it. This is how `replay_big_data`'s complete size was determined.
 
-Now that we know the size of this struct and where it sets up the dispatch routines, we can finally start labeling the dispatch routines something appropriate for their packet type! 
+Now that we know the size of this struct and where it sets up the dispatch routines, we can finally start labeling the dispatch routines something appropriate for their packet type!
