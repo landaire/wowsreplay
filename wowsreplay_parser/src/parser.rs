@@ -10,14 +10,14 @@ use nom::{
 use crate::wows::packet::Packet;
 
 #[derive(Debug)]
-struct Header<'a> {
-    magic: u32,
-    block_count: u32,
-    metadata: &'a [u8]
+pub struct Header<'a> {
+    pub magic: u32,
+    pub block_count: u32,
+    pub metadata: &'a [u8]
 }
 
 
-fn header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
+pub fn header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
     let (input, magic) = le_u32(input)?;
     let (input, block_count) = le_u32(input)?;
     let (input, len) = le_u32(input)?;
@@ -28,7 +28,7 @@ fn header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
     }))
 }
 
-fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
+pub fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
     let (input, unk) = le_u32(input)?;
     let (input, len) = le_u32(input)?;
     let mut padded_len = len as usize;
@@ -44,7 +44,7 @@ fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
 
 }
 
-fn parse_replay_network_data<'a>(input: &'a [u8]) -> IResult<&'a [u8], Packet<'a>> {
+pub fn parse_replay_network_data<'a>(input: &'a [u8]) -> IResult<&'a [u8], Packet<'a>> {
     let (input, data_len) = le_u32(input)?;
     let (input, ty) = le_u32(input)?;
     let (input, time) = le_u32(input)?;

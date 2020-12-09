@@ -12,11 +12,7 @@ pub struct Packet<'a> {
 
 #[derive(Debug)]
 pub enum PacketData<'a> {
-    Packet0x8 {
-        unk: u32,
-        entity_id: u32,
-        data: Packet0x8Data<'a>,
-    },
+    CreateEntity(CreateEntity<'a>),
     ResetEntities(u8),
     SetGameTimer(u64),
     Packet0x25(u32, u16, &'a [u8]),
@@ -24,12 +20,23 @@ pub enum PacketData<'a> {
 }
 
 #[derive(Debug)]
-pub enum Packet0x8Data<'a> {
-    Message {
-        sender_id: u32,
-        channel: &'a str,
-        text: &'a str,
-    },
+pub struct CreateEntity<'a> {
+    pub unk: u32,
+    pub entity_id: u32,
+    pub args: CreateEntityArgs<'a>,
+}
+
+#[derive(Debug)]
+pub struct MessageArgs<'a> {
+    pub sender_id: u32,
+    pub channel: &'a str,
+    pub text: &'a str,
+}
+
+
+#[derive(Debug)]
+pub enum CreateEntityArgs<'a> {
+    Message(MessageArgs<'a>),
     Other(&'a [u8]),
 }
 
@@ -122,7 +129,7 @@ impl<'a> Packet<'a> {
                 let unk = rdr.read_u32::<LittleEndian>().unwrap();
                 let entity_id = rdr.read_u32::<LittleEndian>().unwrap();
                 let data_len = rdr.read_u32::<LittleEndian>().unwrap();
-                let data = match entity_id {
+                let args = match entity_id {
                     0x72 => {
                         let sender_id = rdr.read_u32::<LittleEndian>().unwrap();
 
@@ -135,29 +142,23 @@ impl<'a> Packet<'a> {
 
                         let text_len = rdr.read_u8().unwrap() as usize;
                         let offset = rdr.position() as usize;
-                        println!("{} offset: {:X}, len: {:X}", channel, offset, text_len);
                         let text =
                             std::str::from_utf8(&self.data[offset..offset + text_len]).unwrap();
 
                         rdr.set_position((offset+channel_len) as u64);
 
-                        Packet0x8Data::Message {
+                        CreateEntityArgs::Message(MessageArgs {
                             sender_id,
                             channel,
                             text,
-                        }
+                        })
                     }
                     _ => {
-                        return None;
                         let offset = rdr.position() as usize;
-                        Packet0x8Data::Other(&self.data[offset..])
+                        CreateEntityArgs::Other(&self.data[offset..])
                     }
                 };
-                Some(PacketData::Packet0x8 {
-                    unk,
-                    entity_id,
-                    data,
-                })
+                Some(PacketData::CreateEntity(CreateEntity { unk, entity_id, args }))
             }
             PacketType::SetGameStartTimeMicroSeconds => Some(PacketData::SetGameTimer(
                 rdr.read_u64::<LittleEndian>().unwrap(),

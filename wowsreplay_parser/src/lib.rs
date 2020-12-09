@@ -17,7 +17,7 @@ impl Unpacker {
         }
     }
 
-    fn unpack(&mut self, data: &mut [u8], unpadded_len: usize) -> Vec<u8> {
+    pub fn unpack(&mut self, data: &mut [u8], unpadded_len: usize) -> Vec<u8> {
         self.decrypt(data);
         self.decompress(&mut data[..unpadded_len])
     }
