@@ -20,6 +20,10 @@ struct Opt {
     /// Output file for the JSON metadata
     #[structopt(long = "metadata", parse(from_os_str))]
     metadata_output: Option<PathBuf>,
+
+    /// Enable debug logging
+    #[structopt(short = "d", long = "debug")]
+    debug: bool,
 }
 
 fn main() -> std::io::Result<()> {
@@ -58,14 +62,26 @@ fn main() -> std::io::Result<()> {
         network_data = parse_result.0;
         let packet = parse_result.1;
 
-        *unique_packet_types.entry(packet.ty).or_default() += 1;
+        if opt.debug {
+            *unique_packet_types.entry(packet.ty).or_default() += 1;
+        }
+
         if let Some(PacketType::MaybeCreateEntity) = packet.ty() {
             if let Some(PacketData::CreateEntity(entity_args)) = packet.deserialize() {
                 if let CreateEntityArgs::Message(message_data) = entity_args.args {
                     println!("0x{:X} ({}): {}", message_data.sender_id, message_data.channel, message_data.text);
+                } else {
+                    if opt.debug {
+                        println!("{:#X?}", entity_args);
+                    }
                 }
             }
         }
+    }
+
+    if opt.debug {
+        println!("Packet type counts:");
+        println!("{:#X?}", unique_packet_types);
     }
 
     // let res =decrypted_block(data.1);

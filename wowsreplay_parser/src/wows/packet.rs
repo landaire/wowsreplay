@@ -13,7 +13,7 @@ pub struct Packet<'a> {
 #[derive(Debug)]
 pub enum PacketData<'a> {
     CreateEntity(CreateEntity<'a>),
-    ResetEntities(u8),
+    ResetEntities(bool),
     SetGameTimer(u64),
     Packet0x25(u32, u16, &'a [u8]),
     String(&'a str),
@@ -21,9 +21,15 @@ pub enum PacketData<'a> {
 
 #[derive(Debug)]
 pub struct CreateEntity<'a> {
-    pub unk: u32,
     pub entity_id: u32,
+    pub event_type: u32,
     pub args: CreateEntityArgs<'a>,
+}
+
+#[derive(Debug)]
+pub enum CreateEntityArgs<'a> {
+    Message(MessageArgs<'a>),
+    Other(&'a [u8]),
 }
 
 #[derive(Debug)]
@@ -31,13 +37,6 @@ pub struct MessageArgs<'a> {
     pub sender_id: u32,
     pub channel: &'a str,
     pub text: &'a str,
-}
-
-
-#[derive(Debug)]
-pub enum CreateEntityArgs<'a> {
-    Message(MessageArgs<'a>),
-    Other(&'a [u8]),
 }
 
 #[derive(Debug)]
@@ -66,7 +65,7 @@ pub enum PacketType {
     ResetEntities = 0x10,
     SetGameStartTimeMicroSeconds = 0xF,
     GameVersion = 0x16,
-    // BWEntities::handleBasePlayerCreate
+    /// BWEntities::handleBasePlayerCreate
     HandleBasePlayerCreate = 0x25,
     EOF = 0xFFFF_FFFF,
 }
@@ -79,7 +78,7 @@ impl TryFrom<u32> for PacketType {
             0x8 => PacketType::MaybeCreateEntity,
             0xF => PacketType::SetGameStartTimeMicroSeconds,
             0x16 => PacketType::GameVersion,
-            0x25 => PacketType::HandleBasePlayerCreate,
+            0x25 | 0x0 => PacketType::HandleBasePlayerCreate,
             0xFFFF_FFFF => PacketType::EOF,
             _ => return Err("unknown packet type"),
         };
@@ -116,20 +115,23 @@ impl<'a> Packet<'a> {
                         .expect("failed to convert packet string data to utf8 string"),
                 ))
             }
-            PacketType::ResetEntities => Some(PacketData::ResetEntities(self.data[0])),
+            PacketType::ResetEntities => Some(PacketData::ResetEntities(self.data[0] != 0)),
             PacketType::HandleBasePlayerCreate => {
                 //let data_len: u32 = u32::from_le_bytes(self.data[6..10].try_into().unwrap());
+                let entity_id = rdr.read_u32::<LittleEndian>().unwrap();
+                let event_id = rdr.read_u16::<LittleEndian>().unwrap();
+                let entity_len = rdr.read_u32::<LittleEndian>().unwrap();
                 Some(PacketData::Packet0x25(
-                    rdr.read_u32::<LittleEndian>().unwrap(),
-                    rdr.read_u16::<LittleEndian>().unwrap(),
+                    entity_id,
+                    event_id,
                     &self.data[rdr.position() as usize..],
                 ))
             }
             PacketType::MaybeCreateEntity => {
-                let unk = rdr.read_u32::<LittleEndian>().unwrap();
                 let entity_id = rdr.read_u32::<LittleEndian>().unwrap();
+                let event_type = rdr.read_u32::<LittleEndian>().unwrap();
                 let data_len = rdr.read_u32::<LittleEndian>().unwrap();
-                let args = match entity_id {
+                let args = match event_type {
                     0x72 => {
                         let sender_id = rdr.read_u32::<LittleEndian>().unwrap();
 
@@ -158,7 +160,7 @@ impl<'a> Packet<'a> {
                         CreateEntityArgs::Other(&self.data[offset..])
                     }
                 };
-                Some(PacketData::CreateEntity(CreateEntity { unk, entity_id, args }))
+                Some(PacketData::CreateEntity(CreateEntity { entity_id, event_type, args }))
             }
             PacketType::SetGameStartTimeMicroSeconds => Some(PacketData::SetGameTimer(
                 rdr.read_u64::<LittleEndian>().unwrap(),
