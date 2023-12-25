@@ -1,10 +1,10 @@
-use wowsreplay_parser::*;
+use memmap::MmapOptions;
+use std::fs::File;
+use std::path::PathBuf;
+use structopt::StructOpt;
 use wowsreplay_parser::parser::*;
 use wowsreplay_parser::wows::packet::*;
-use structopt::StructOpt;
-use std::path::PathBuf;
-use std::fs::File;
-use memmap::MmapOptions;
+use wowsreplay_parser::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "wowsreplay", about = "WoWs replay parser")]
@@ -38,14 +38,18 @@ fn main() -> std::io::Result<()> {
 
     if let Some(game_metadata_output) = opt.metadata_output {
         let json: serde_json::Value = serde_json::from_slice(header.metadata).unwrap();
-        std::fs::write(game_metadata_output, serde_json::to_string_pretty(&json).unwrap())?;
+        std::fs::write(
+            game_metadata_output,
+            serde_json::to_string_pretty(&json).unwrap(),
+        )?;
     }
 
-    let res = block(data);
-    assert!(res.is_ok());
+    // let res = block(data);
+    // assert!(res.is_ok());
 
-    let (len, encrypted_block) = res.unwrap().1;
+    let (len, encrypted_block) = (data.len(), data);
     let mut encrypted_block = encrypted_block.to_vec();
+    println!("encrypted block len: 0x{:x}", len);
 
     let mut unpacker = wowsreplay_parser::Unpacker::new();
     let unpacked = unpacker.unpack(encrypted_block.as_mut_slice(), len);
@@ -69,7 +73,10 @@ fn main() -> std::io::Result<()> {
         if let Some(PacketType::MaybeCreateEntity) = packet.ty() {
             if let Some(PacketData::CreateEntity(entity_args)) = packet.deserialize() {
                 if let CreateEntityArgs::Message(message_data) = entity_args.args {
-                    println!("0x{:X} ({}): {}", message_data.sender_id, message_data.channel, message_data.text);
+                    println!(
+                        "0x{:X} ({}): {}",
+                        message_data.sender_id, message_data.channel, message_data.text
+                    );
                 } else {
                     if opt.debug {
                         println!("{:#X?}", entity_args);

@@ -1,36 +1,41 @@
-
 extern crate nom;
-use nom::{
-  IResult,
-  bytes::complete::{tag, take_while_m_n, take},
-  number::complete::le_u32,
-  combinator::map_res,
-  sequence::tuple
-};
 use crate::wows::packet::Packet;
+use nom::{
+    bytes::complete::{tag, take, take_while_m_n},
+    combinator::map_res,
+    multi::count,
+    number::complete::le_u32,
+    sequence::tuple,
+    IResult,
+};
 
 #[derive(Debug)]
 pub struct Header<'a> {
     pub magic: u32,
     pub block_count: u32,
-    pub metadata: &'a [u8]
+    pub metadata: &'a [u8],
 }
-
 
 pub fn header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
     let (input, magic) = le_u32(input)?;
     let (input, block_count) = le_u32(input)?;
     let (input, len) = le_u32(input)?;
     let (input, metadata) = take(len)(input)?;
+    let (input, blocks) = count(block, (block_count as usize) - 1)(input)?;
 
-    Ok((input, Header {
-        magic, block_count, metadata
-    }))
+    Ok((
+        input,
+        Header {
+            magic,
+            block_count,
+            metadata,
+        },
+    ))
 }
 
 pub fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
-    let (input, unk) = le_u32(input)?;
     let (input, len) = le_u32(input)?;
+    println!("block len: {len:#x}");
     let mut padded_len = len as usize;
     let extra = padded_len % 8;
     if extra != 0 {
@@ -41,7 +46,6 @@ pub fn block(input: &[u8]) -> IResult<&[u8], (usize, &[u8])> {
 
     let (input, block) = take(padded_len)(input)?;
     IResult::Ok((input, (len as usize, block)))
-
 }
 
 pub fn parse_replay_network_data<'a>(input: &'a [u8]) -> IResult<&'a [u8], Packet<'a>> {
@@ -51,7 +55,15 @@ pub fn parse_replay_network_data<'a>(input: &'a [u8]) -> IResult<&'a [u8], Packe
 
     let (input, data) = take(data_len)(input)?;
 
-    IResult::Ok((input, Packet { data_len, ty, time, data }))
+    IResult::Ok((
+        input,
+        Packet {
+            data_len,
+            ty,
+            time,
+            data,
+        },
+    ))
 }
 
 #[cfg(test)]

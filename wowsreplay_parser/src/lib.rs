@@ -1,10 +1,12 @@
 pub mod parser;
 pub mod wows;
 
-use blowfish::cipher::{NewBlockCipher, BlockCipher};
+use blowfish::cipher::{BlockCipher, NewBlockCipher};
 use std::convert::TryInto;
 
-const ENCRYPTION_KEY: [u8; 16] = [0x29, 0xb7, 0xc9, 0x09, 0x38, 0x3f, 0x84, 0x88, 0xfa, 0x98, 0xec, 0x4e, 0x13, 0x19, 0x79, 0xfb];
+const ENCRYPTION_KEY: [u8; 16] = [
+    0x29, 0xb7, 0xc9, 0x09, 0x38, 0x3f, 0x84, 0x88, 0xfa, 0x98, 0xec, 0x4e, 0x13, 0x19, 0x79, 0xfb,
+];
 
 pub struct Unpacker {
     blowfish: blowfish::Blowfish,
@@ -59,15 +61,14 @@ impl Unpacker {
 
     fn decompress(&mut self, data: &mut [u8]) -> Vec<u8> {
         std::fs::write("data2.zlib", &*data);
+        use flate2::read::ZlibDecoder;
         use std::io::prelude::*;
-        use flate2::write::ZlibDecoder;
         let mut writer = Vec::new();
 
-        let mut d = ZlibDecoder::new(writer);
-        d.write_all(&*data).expect("failed to write");
-        let output = d.finish().expect("failed to finish");
-        //std::fs::write("data2.bin", &output);
+        let mut d = flate2::read::ZlibDecoder::new(&*data);
+        d.read_to_end(&mut writer);
+        std::fs::write("data2.bin", writer.as_slice());
 
-        output
+        writer
     }
 }
